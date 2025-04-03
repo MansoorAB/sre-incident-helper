@@ -75,4 +75,14 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     logger.info("Shutting down SRE Incident Response Bot...")
-    # Add any cleanup code here 
+    # Add any cleanup code here
+
+@app.get("/api/incident/{incident_no}")
+async def get_incident(incident_no: str):
+    try:
+        incident = incident_agent.get_incident_details(incident_no)
+        if not incident:
+            raise HTTPException(status_code=404, detail="Incident not found")
+        return incident
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) 

@@ -1,0 +1,7 @@
+We are experiencing high latency (>200ms) in our 5G Core network affecting user data services. Multiple users have reported slow internet speeds and connection drops in the eastern region. Monitoring shows increased packet loss.
+
+VoLTE service degradation reported in multiple locations. Call setup success rate has dropped to 85%. Users are experiencing call drops and poor voice quality. Initial monitoring shows IMS registration delays.
+
+DNS resolution failures observed in the core network. About 30% of service requests are failing with timeout errors. This is causing authentication failures and service access issues for end users.
+
+Network congestion alert in the transport network. Multiple cell sites reporting backhaul utilization >90%. Users experiencing slow data speeds and video buffering issues during peak hours.

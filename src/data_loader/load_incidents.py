@@ -75,117 +75,142 @@ class IncidentDataLoader:
         self.logger.info(f"Found {len(existing)} existing incidents in MongoDB")
         return existing
 
-    def load_existing_faiss_index(self):
+    def load_existing_faiss_index(self) -> bool:
         """Load existing FAISS index and mapping if they exist."""
         try:
-            if os.path.exists('data/vector_store/incident_index.faiss'):
-                self.index = faiss.read_index('data/vector_store/incident_index.faiss')
-                with open('data/vector_store/incident_map.json', 'r') as f:
+            faiss_path = 'data/vector_store/incident_index.faiss'
+            map_path = 'data/vector_store/incident_map.json'
+            
+            if os.path.exists(faiss_path) and os.path.exists(map_path):
+                self.index = faiss.read_index(faiss_path)
+                with open(map_path, 'r') as f:
                     self.incident_map = json.load(f)
                 self.logger.info("Successfully loaded existing FAISS index")
                 return True
+            else:
+                self.logger.info("No existing FAISS index found")
+                return False
         except Exception as e:
             self.logger.error(f"Error loading existing FAISS index: {str(e)}")
-        return False
+            return False
 
-    def prepare_search_text(self, incident: Dict[str, Any]) -> str:
-        """Prepare text for semantic search from incident details."""
-        return f"{incident.get('description', '')} {' '.join(incident.get('keywords', []))}"
+    def create_new_faiss_index(self):
+        """Create new FAISS index from all MongoDB incidents."""
+        try:
+            # Get all incidents from MongoDB
+            all_incidents = list(self.collection.find({}))
+            self.logger.info(f"Creating new FAISS index from {len(all_incidents)} incidents")
 
-    def load_incidents(self, incidents_dir: str):
-        """Load new incidents into both FAISS and MongoDB."""
-        self.logger.info("Starting to load incidents...")
-        
-        # Get existing incidents from MongoDB
-        existing_incidents = self.get_existing_incidents()
+            texts_for_embedding = []
+            incident_numbers = []
 
-        # Load existing FAISS index if available
-        has_existing_index = self.load_existing_faiss_index()
-
-        # Lists to store data for FAISS
-        texts_for_embedding = []
-        incident_numbers = []
-        new_incidents_count = 0
-
-        # Process each incident file
-        for filename in os.listdir(incidents_dir):
-            if not filename.endswith('.json'):
-                continue
-
-            file_path = os.path.join(incidents_dir, filename)
-            try:
-                with open(file_path, 'r') as f:
-                    incident = json.load(f)
-                
-                # Skip if incident already exists in MongoDB
-                if incident["incident_no"] in existing_incidents:
-                    self.logger.debug(f"Skipping existing incident: {incident['incident_no']}")
-                    continue
-
-                # Store new incident in MongoDB
-                self.collection.insert_one(incident)
-                self.logger.info(f"Added incident {incident['incident_no']} to MongoDB")
-                new_incidents_count += 1
-
-                # Prepare text for FAISS
-                search_text = self.prepare_search_text(incident)
+            for incident in all_incidents:
+                search_text = f"{incident.get('description', '')} {' '.join(incident.get('keywords', []))}"
                 texts_for_embedding.append(search_text)
-                incident_numbers.append(incident["incident_no"])
-                self.logger.info(f"Prepared incident {incident['incident_no']} for FAISS indexing")
+                incident_numbers.append(incident['incident_no'])
 
-            except Exception as e:
-                self.logger.error(f"Error processing {filename}: {str(e)}")
-                continue
+            if texts_for_embedding:
+                # Create embeddings
+                embeddings = self.model.encode(texts_for_embedding)
+                dimension = embeddings.shape[1]
 
-        if new_incidents_count == 0:
-            self.logger.info("No new incidents to process")
-            return
-
-        self.logger.info(f"Processing {new_incidents_count} new incidents for FAISS index")
-
-        # Create or update FAISS index
-        if texts_for_embedding:
-            self.logger.info("Generating embeddings and updating FAISS index...")
-            new_embeddings = self.model.encode(texts_for_embedding)
-
-            if self.index is None:
-                # Create new index
-                dimension = new_embeddings.shape[1]
+                # Initialize FAISS index
                 self.index = faiss.IndexFlatL2(dimension)
-                self.index.add(np.array(new_embeddings))
-                # Create new mapping
-                self.incident_map = {i: inc_no for i, inc_no in enumerate(incident_numbers)}
-                self.logger.info("Created new FAISS index")
+                self.index.add(np.array(embeddings))
+                
+                # Create mapping
+                self.incident_map = {str(i): inc_no for i, inc_no in enumerate(incident_numbers)}
+                
+                # Save index and mapping
+                self.save_faiss_index()
+                self.logger.info("Successfully created and saved new FAISS index")
+                return True
             else:
-                # Add to existing index
-                self.index.add(np.array(new_embeddings))
-                # Update mapping
-                start_idx = max(int(idx) for idx in self.incident_map.keys()) + 1
-                for i, inc_no in enumerate(incident_numbers):
-                    self.incident_map[str(start_idx + i)] = inc_no
-                self.logger.info("Updated existing FAISS index")
+                self.logger.warning("No incidents found to create FAISS index")
+                return False
 
-            # Save updated FAISS index and mapping
-            self.save_faiss_index()
-
-        self.logger.info(f"Successfully completed processing {new_incidents_count} new incidents!")
+        except Exception as e:
+            self.logger.error(f"Error creating new FAISS index: {str(e)}")
+            return False
 
     def save_faiss_index(self):
-        """Save FAISS index and incident mapping."""
+        """Save FAISS index and mapping."""
         try:
             if not os.path.exists('data/vector_store'):
                 os.makedirs('data/vector_store')
 
-            # Save FAISS index
             faiss.write_index(self.index, 'data/vector_store/incident_index.faiss')
-            self.logger.info("Saved FAISS index to disk")
-
-            # Save incident mapping
             with open('data/vector_store/incident_map.json', 'w') as f:
                 json.dump(self.incident_map, f)
-            self.logger.info("Saved incident mapping to disk")
+            self.logger.info("Saved FAISS index and mapping to disk")
         except Exception as e:
-            self.logger.error(f"Error saving FAISS index and mapping: {str(e)}")
+            self.logger.error(f"Error saving FAISS index: {str(e)}")
+            raise
+
+    def load_incidents(self, incidents_dir: str):
+        """Load incidents into FAISS and MongoDB."""
+        self.logger.info("Starting incident loading process...")
+
+        # Step 1: Get existing incidents from MongoDB
+        existing_incidents = self.get_existing_incidents()
+
+        # Step 2: Check for existing FAISS index
+        has_existing_index = self.load_existing_faiss_index()
+        if not has_existing_index:
+            self.logger.info("No existing FAISS index found, creating new one...")
+            if not self.create_new_faiss_index():
+                self.logger.error("Failed to create new FAISS index")
+                return
+
+        # Step 3: Process new incidents
+        new_incidents = []
+        for filename in os.listdir(incidents_dir):
+            if not filename.endswith('.json'):
+                continue
+
+            try:
+                with open(os.path.join(incidents_dir, filename), 'r') as f:
+                    incident = json.load(f)
+                    
+                # Skip if incident already exists
+                if incident['incident_no'] in existing_incidents:
+                    continue
+                    
+                # Add to MongoDB
+                self.collection.insert_one(incident)
+                new_incidents.append(incident)
+                self.logger.info(f"Added incident {incident['incident_no']} to MongoDB")
+                
+            except Exception as e:
+                self.logger.error(f"Error processing {filename}: {str(e)}")
+                continue
+
+        # Step 4: Update FAISS index with new incidents (if any)
+        if new_incidents:
+            self.logger.info(f"Adding {len(new_incidents)} new incidents to FAISS index")
+            try:
+                # Prepare new embeddings
+                texts = [f"{inc.get('description', '')} {' '.join(inc.get('keywords', []))}" 
+                        for inc in new_incidents]
+                embeddings = self.model.encode(texts)
+
+                # Add to existing index
+                self.index.add(np.array(embeddings))
+
+                # Update mapping
+                start_idx = max(int(idx) for idx in self.incident_map.keys()) + 1
+                for i, incident in enumerate(new_incidents):
+                    self.incident_map[str(start_idx + i)] = incident['incident_no']
+
+                # Save updated index
+                self.save_faiss_index()
+                self.logger.info("Successfully updated FAISS index with new incidents")
+
+            except Exception as e:
+                self.logger.error(f"Error updating FAISS index: {str(e)}")
+                raise
+        else:
+            self.logger.info("No new incidents to add to FAISS index")
 
     def test_search(self, query: str, k: int = 5):
         """Test search functionality."""

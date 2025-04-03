@@ -59,11 +59,23 @@ class IncidentSearchAgent:
 
     def search_similar_incidents(self, query: str) -> List[str]:
         """Search for similar incidents using FAISS."""
+        if self.vector_store.index is None:
+            logger.error("FAISS index is not initialized. Cannot perform search.")
+            raise Exception("FAISS index is not initialized.")
         return self.vector_store.search(query, k=5)
 
-    def get_incident_details(self, incident_nos: List[str]) -> List[Dict[str, Any]]:
+    def get_incident_details(self, incident_no: str):
         """Get full incident details from MongoDB."""
-        return list(self.collection.find({"incident_no": {"$in": incident_nos}}))
+        try:
+            incident = self.collection.find_one({"incident_no": incident_no})
+            if incident:
+                # Remove MongoDB's _id field
+                incident.pop('_id', None)
+                return incident
+            return None
+        except Exception as e:
+            logger.error(f"Error fetching incident details: {str(e)}")
+            raise
 
     def generate_response(self, query: str, incidents: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Generate response using Claude."""
@@ -79,13 +91,25 @@ class IncidentSearchAgent:
 
             Current Incident Query: {query}
 
-            Provide a detailed response including:
-            1. Likely root cause analysis
-            2. Recommended resolution steps
-            3. Preventive measures
-            4. References to similar incidents used
+            Provide a detailed response in the following format:
+            
+            Root Cause Analysis:
+            • [Root cause point 1]
+            • [Root cause point 2]
+            ...
 
-            Format your response in a clear, structured manner.""",
+            Resolution Steps:
+            • [Resolution step 1]
+            • [Resolution step 2]
+            ...
+
+            Preventive Measures:
+            • [Preventive measure 1]
+            • [Preventive measure 2]
+            ...
+
+            Note: Please use bullet points (•) for each item and ensure each point is clear and concise.
+            Do not include incident references within the sections - they will be displayed separately.""",
             input_variables=["context", "query"]
         )
 
@@ -121,7 +145,7 @@ class IncidentSearchAgent:
             
             # Get full incident details
             logger.info("Retrieving incident details from MongoDB...")
-            similar_incidents = self.get_incident_details(similar_incident_nos)
+            similar_incidents = [self.get_incident_details(incident_no) for incident_no in similar_incident_nos]
             logger.info(f"Retrieved {len(similar_incidents)} incident details")
             
             # Generate response
