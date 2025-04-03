@@ -1,0 +1,18 @@
+langchain>=0.1.0
+langchain-openai>=0.0.5  # For OpenAI integration
+langchain-anthropic>=0.1.1  # For Claude integration
+langchain-community>=0.0.20  # For tools and utilities
+python-dotenv>=1.0.0
+openai>=1.12.0
+pandas>=2.2.0
+numpy>=1.26.0
+fastapi>=0.109.0
+uvicorn>=0.27.0
+pydantic>=2.6.0
+python-multipart>=0.0.6
+sentence-transformers>=2.5.1
+faiss-cpu>=1.7.4
+pymongo>=4.6.1
+anthropic>=0.18.0
+pytz>=2024.1
+pymongo[srv]
