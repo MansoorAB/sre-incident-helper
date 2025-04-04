@@ -120,6 +120,7 @@ body {
 }
 
 .incident-badge {
+    position: relative;
     background: linear-gradient(45deg, #f5f7fa, #e3e6e9);
     border: 1px solid #dee2e6;
     padding: 0.5rem 1rem;
@@ -128,6 +129,8 @@ body {
     transition: all 0.2s;
     font-weight: 500;
     color: #2c3e50;
+    display: inline-block;
+    margin: 0.25rem;
 }
 
 .incident-badge:hover {
@@ -178,4 +181,61 @@ body {
 
 .modal-title {
     font-weight: 500;
+}
+
+.non-incident-container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.non-incident-message {
+    background: #fff5f5;
+    padding: 2rem;
+    border-radius: 10px;
+    border-left: 4px solid #e53e3e;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.non-incident-message .warning-icon {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+}
+
+.non-incident-message h3 {
+    color: #e53e3e;
+    margin-bottom: 1rem;
+    font-size: 1.5rem;
+}
+
+.non-incident-message p {
+    color: #e53e3e;
+    margin-bottom: 1rem;
+    line-height: 1.6;
+    font-size: 1.1rem;
+}
+
+.non-incident-message ul {
+    list-style: none;
+    padding-left: 0;
+    margin: 1.5rem 0;
+    text-align: left;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.non-incident-message li {
+    position: relative;
+    padding-left: 1.5rem;
+    margin-bottom: 1rem;
+    color: #2d3748;
+    font-size: 1.05rem;
+}
+
+.non-incident-message li::before {
+    content: "→";
+    position: absolute;
+    left: 0;
+    color: #e53e3e;
 } 

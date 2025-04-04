@@ -70,3 +70,17 @@ class FaissVectorStore:
         results = [self.incident_map[str(i)] for i in I[0]]
         logger.info(f"Search completed. Found {len(results)} results")
         return results 
+
+    def search_with_scores(self, query: str, k: int = 5) -> tuple[List[str], List[float]]:
+        """Search for similar incidents and return their IDs and similarity scores."""
+        if self.index is None:
+            raise Exception("FAISS index not initialized. Please ensure index is created or loaded.")
+        
+        query_embedding = self.model.encode([query])
+        D, I = self.index.search(np.array(query_embedding), k)
+        
+        # Convert distances to similarity scores (1 / (1 + distance))
+        similarity_scores = [1 / (1 + float(d)) for d in D[0]]
+        incident_ids = [self.incident_map[str(i)] for i in I[0]]
+        
+        return incident_ids, similarity_scores 

@@ -35,7 +35,53 @@ async function analyzeIncident() {
 }
 
 function displayResults(data) {
-    // Parse the response into sections
+    const resultsSection = document.getElementById('resultsSection');
+    
+    // Check if this is a non-incident query response
+    if (data.is_non_incident_query) {
+        // Show only the friendly message without other sections
+        resultsSection.innerHTML = `
+            <div class="non-incident-container">
+                <div class="non-incident-message">
+                    <div class="warning-icon">⚠️</div>
+                    <h3>Non-Incident Query Detected</h3>
+                    <p>This application is specifically designed to help with telecom incident analysis and resolution.</p>
+                    <p>Please try asking about specific telecom-related incidents, such as:</p>
+                    <ul>
+                        <li>Network connectivity issues in the core network</li>
+                        <li>Service degradation in specific regions</li>
+                        <li>System outages or performance problems</li>
+                        <li>Customer impact due to network failures</li>
+                    </ul>
+                </div>
+            </div>`;
+        
+        resultsSection.classList.remove('d-none');
+        setTimeout(() => resultsSection.classList.add('show'), 100);
+        return;
+    }
+
+    // Reset the results section HTML for incident queries
+    resultsSection.innerHTML = `
+        <div class="result-card">
+            <h3>Root Cause Analysis</h3>
+            <div id="rootCauseList" class="content-list"></div>
+        </div>
+        <div class="result-card">
+            <h3>Resolution Steps</h3>
+            <div id="resolutionList" class="content-list"></div>
+        </div>
+        <div class="result-card">
+            <h3>Preventive Measures</h3>
+            <div id="preventiveList" class="content-list"></div>
+        </div>
+        <div class="similar-incidents">
+            <h3>Similar Historical Incidents</h3>
+            <div id="similarIncidents" class="incident-badges"></div>
+        </div>
+    `;
+
+    // Regular incident query handling
     const sections = parseResponse(data.response);
     
     // Display root cause
@@ -47,13 +93,18 @@ function displayResults(data) {
     // Display preventive measures
     document.getElementById('preventiveList').innerHTML = formatList(sections.preventiveMeasures);
     
-    // Display similar incidents
+    // Display similar incidents with similarity scores
     document.getElementById('similarIncidents').innerHTML = data.reference_incidents
-        .map(inc => `<span class="incident-badge" onclick="showIncidentDetails('${inc}')">${inc}</span>`)
+        .map(inc => {
+            const similarityPercent = Math.round(inc.similarity * 100);
+            return `
+                <span class="incident-badge" onclick="showIncidentDetails('${inc.incident_no}', ${inc.similarity})">
+                    ${inc.incident_no} - ${similarityPercent}%
+                </span>`;
+        })
         .join('');
 
     // Show results section with animation
-    const resultsSection = document.getElementById('resultsSection');
     resultsSection.classList.remove('d-none');
     setTimeout(() => resultsSection.classList.add('show'), 100);
 }
@@ -133,7 +184,7 @@ function formatList(items) {
     return `<ul class="clean-list">${listItems.join('')}</ul>`;
 }
 
-async function showIncidentDetails(incidentNo) {
+async function showIncidentDetails(incidentNo, similarity) {
     try {
         const response = await fetch(`/api/incident/${incidentNo}`);
         if (!response.ok) throw new Error('Failed to fetch incident details');
@@ -145,9 +196,11 @@ async function showIncidentDetails(incidentNo) {
             ? incident.preventive_measures
             : [incident.preventive_measures];
         
+        const similarityPercent = Math.round(similarity * 100);
+        
         const modalContent = `
             <div class="incident-detail">
-                <h6>Incident Number</h6>
+                <h6>Incident Number <span class="similarity-badge">${similarityPercent}% match</span></h6>
                 <p>${incident.incident_no}</p>
             </div>
             <div class="incident-detail">
